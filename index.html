@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login & Join</title>
+    <style>
+        table {
+            width: 280px;
+            margin: auto;
+            font-size: 15px;
+        }
+        input[type="text"], input[type="password"], input[type="date"], select {
+            width: 250px;
+            height: 32px;
+            font-size: 15px;
+            border: 0;
+            border-radius: 15px;
+            outline: none;
+            padding-left: 10px;
+            background-color: rgb(233,233,233);
+        }
+        .btn {
+            width: 263px;
+            height: 32px;
+            font-size: 15px;
+            border: 0;
+            border-radius: 15px;
+            outline: none;
+            background-color: rgb(164, 199, 255);
+            cursor: pointer;
+        }
+        .btn:active {
+            background-color: rgb(61, 135, 255);
+        }
+        a {
+            font-size: 12px;
+            color: darkgray;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .join {
+            text-align: center;
+        }
+        #joinForm, #wordSection, #quizSection {
+            display: none;
+        }
+        #quizSection {
+            text-align: center;
+            margin-top: 30px;
+        }
+    </style>
+    <script>
+        let wordList = [];
+        let currentIndex = 0;
+        let correctCount = 0;
+
+        function showJoinForm() {
+            document.getElementById("loginForm").style.display = "none";
+            document.getElementById("joinForm").style.display = "block";
+            document.getElementById("wordSection").style.display = "none";
+            document.getElementById("quizSection").style.display = "none";
+        }
+
+        function showLoginForm() {
+            document.getElementById("joinForm").style.display = "none";
+            document.getElementById("loginForm").style.display = "block";
+            document.getElementById("wordSection").style.display = "none";
+            document.getElementById("quizSection").style.display = "none";
+        }
+
+        function register(event) {
+            event.preventDefault();
+
+            let userId = document.getElementById("joinId").value;
+            let password = document.getElementById("joinPassword").value;
+            let confirmPassword = document.getElementById("joinPasswordConfirm").value;
+
+            if (password !== confirmPassword) {
+                alert("비밀번호가 일치하지 않습니다.");
+                return;
+            }
+
+            let users = JSON.parse(localStorage.getItem("users")) || [];
+
+            if (users.some(user => user.id === userId)) {
+                alert("이미 사용 중인 아이디입니다.");
+                return;
+            }
+
+            users.push({ id: userId, password: password });
+            localStorage.setItem("users", JSON.stringify(users));
+
+            alert("회원가입 성공!");
+            showLoginForm();
+        }
+
+        function login(event) {
+            event.preventDefault();
+
+            let inputId = document.getElementById("loginId").value;
+            let inputPassword = document.getElementById("loginPassword").value;
+
+            let users = JSON.parse(localStorage.getItem("users")) || [];
+
+            let matchedUser = users.find(user => user.id === inputId && user.password === inputPassword);
+
+            if (matchedUser) {
+                alert("로그인 성공!");
+                document.getElementById("loginForm").style.display = "none";
+                document.getElementById("wordSection").style.display = "block";
+            } else {
+                alert("아이디 또는 비밀번호가 올바르지 않습니다.");
+            }
+        }
+
+        function addWord() {
+            const wordInput = document.querySelector(".word");
+            const meaningInput = document.querySelector(".meaning");
+
+            const word = wordInput.value.trim();
+            const meaning = meaningInput.value.trim();
+
+            if (!word || !meaning) {
+                alert("단어와 뜻을 모두 입력하세요.");
+                return;
+            }
+
+            wordList.push({ word, meaning });
+
+            const tableBody = document.querySelector("#wordTable tbody");
+            const newRow = document.createElement("tr");
+            newRow.innerHTML = `<td>${word}</td><td>${meaning}</td>`;
+            tableBody.appendChild(newRow);
+
+            wordInput.value = "";
+            meaningInput.value = "";
+            wordInput.focus();
+        }
+
+        function submitWords() {
+            if (wordList.length < 3) {
+                alert("최소 3개 이상의 단어를 입력해야 합니다.");
+            } else if (wordList.length >= 50) {
+                alert("단어는 50개 미만으로 입력해주세요.");
+            } else {
+                alert("제출 완료! 총 단어 수: " + wordList.length);
+                document.getElementById("wordSection").style.display = "none";
+                showRandomWord();
+            }
+        }
+
+        function showRandomWord() {
+            if (wordList.length === 0) {
+                alert("단어가 없습니다. 단어를 추가해주세요.");
+                return;
+            }
+
+            currentIndex = 0;
+            correctCount = 0;
+            showNextQuestion();
+        }
+
+        function showNextQuestion() {
+            if (currentIndex >= wordList.length) {
+                const total = wordList.length;
+                const correct = correctCount;
+                const incorrect = total - correct;
+                const rate = ((correct / total) * 100).toFixed(1);
+
+                const quizSection = document.getElementById("quizSection");
+                quizSection.innerHTML = `
+                    <h2>모든 문제를 다 풀었습니다!</h2>
+                    <p><strong>${total}문제 중 ${correct}문제 맞춤</strong></p>
+                    <p><strong>정답률: ${rate}%</strong></p>
+                    <div id="chartContainer" style="margin: 20px auto;">
+                        <canvas id="resultChart" width="300" height="200" style="display: block; margin: 0 auto; border: 1px solid #ccc;"></canvas>
+                    </div>
+                    <div id="buttonContainer" style="margin-top: 10px;">
+                        <button class="btn" onclick="restartQuiz()">다시 하기</button><br>
+                        <button class="btn" onclick="newQuiz()">새로 만들기</button>
+                    </div>
+                `;
+                drawChart(correct, incorrect);
+                quizSection.style.display = "block";
+                return;
+            }
+
+            const currentWord = wordList[currentIndex];
+            const randomMeanings = getRandomMeanings(currentWord.meaning);
+            randomMeanings.push(currentWord.meaning);
+            randomMeanings.sort(() => Math.random() - 0.5);
+
+            const quizSection = document.getElementById("quizSection");
+            quizSection.innerHTML = `
+                <h2>퀴즈: 해당 단어의 뜻을 선택하세요!</h2>
+                <p>영어 단어: <strong>${currentWord.word}</strong></p>
+            `;
+
+            randomMeanings.forEach((meaning, index) => {
+                quizSection.innerHTML += `<button class="btn" onclick="checkAnswer('${meaning}', '${currentWord.meaning}')">${meaning}</button><br>`;
+            });
+
+            quizSection.style.display = "block";
+        }
+
+        function getRandomMeanings(correctMeaning) {
+            const meanings = wordList.map(wordObj => wordObj.meaning);
+            const randomMeanings = [];
+            while (randomMeanings.length < 3) {
+                const randomIndex = Math.floor(Math.random() * meanings.length);
+                const randomMeaning = meanings[randomIndex];
+                if (!randomMeanings.includes(randomMeaning) && randomMeaning !== correctMeaning) {
+                    randomMeanings.push(randomMeaning);
+                }
+            }
+            return randomMeanings;
+        }
+
+        function checkAnswer(selected, correct) {
+            if (selected === correct) {
+                correctCount++;
+                alert("정답입니다!");
+            } else {
+                alert("틀렸습니다.");
+            }
+
+            currentIndex++;
+            showNextQuestion();
+        }
+
+        function drawChart(correct, incorrect) {
+            const ctx = document.getElementById("resultChart").getContext("2d");
+            const data = {
+                labels: ["정답", "오답"],
+                datasets: [{
+                    label: "정답 통계",
+                    data: [correct, incorrect],
+                    backgroundColor: ["#4caf50", "#f44336"],
+                    borderColor: ["#4caf50", "#f44336"],
+                    borderWidth: 1
+                }]
+            };
+            new Chart(ctx, {
+                type: "bar",
+                data: data,
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        function restartQuiz() {
+            showRandomWord();
+        }
+
+        function newQuiz() {
+            showLoginForm();
+        }
+    </script>
+</head>
+<body>
+    <!-- 로그인 폼 -->
+    <form id="loginForm" onsubmit="login(event)">
+        <table>
+            <tr><td><h2>로그인</h2></td></tr>
+            <tr><td><input type="text" id="loginId" placeholder="ID" required></td></tr>
+            <tr><td><input type="password" id="loginPassword" placeholder="Password" required></td></tr>
+            <tr><td><input type="checkbox"> 로그인 정보 저장</td></tr>
+            <tr><td><input type="submit" value="Sign in" class="btn"></td></tr>
+            <tr><td class="join"><a onclick="showJoinForm()">회원가입</a></td></tr>
+        </table>
+    </form>
+
+    <!-- 회원가입 폼 -->
+    <form id="joinForm" onsubmit="register(event)">
+        <table>
+            <tr><td><h2>회원가입</h2></td></tr>
+            <tr><td>아이디</td></tr>
+            <tr><td><input type="text" id="joinId" required></td></tr>
+            <tr><td>비밀번호</td></tr>
+            <tr><td><input type="password" id="joinPassword" required></td></tr>
+            <tr><td>비밀번호 확인</td></tr>
+            <tr><td><input type="password" id="joinPasswordConfirm" required></td></tr>
+            <tr><td>이름</td></tr>
+            <tr><td><input type="text" required></td></tr>
+            <tr><td>생년월일</td></tr>
+            <tr><td><input type="date" required></td></tr>
+            <tr><td>이메일</td></tr>
+            <tr>
+                <td>
+                    <input type="text" style="width: 120px;"> @
+                    <select>
+                        <option>naver.com</option>
+                        <option>gmail.com</option>
+                        <option>daum.net</option>
+                        <option>nate.com</option>
+                    </select>
+                </td>
+            </tr>
+            <tr><td><input type="submit" value="가입하기" class="btn"></td></tr>
+            <tr><td class="join"><a onclick="showLoginForm()">로그인 화면으로</a></td></tr>
+        </table>
+    </form>
+
+    <!-- 영어 단어 입력 및 확인 영역 -->
+    <div id="wordSection" style="text-align:center; margin-top:30px;">
+        <h2>영어 단어장</h2>
+        <div id="wordInputs">
+            <input type="text" placeholder="영어 단어" class="word" style="width:120px;">
+            <input type="text" placeholder="뜻" class="meaning" style="width:120px;">
+            <button type="button" onclick="addWord()">추가</button>
+        </div>
+
+        <table id="wordTable" border="1" style="margin: 20px auto; width: 300px;">
+            <thead>
+                <tr>
+                    <th>영어 단어</th>
+                    <th>뜻</th>
+                </tr>
+            </thead>
+            <tbody>
+            </tbody>
+        </table>
+
+        <button class="btn" onclick="submitWords()">확인</button>
+    </div>
+
+    <!-- 퀴즈 섹션 -->
+    <div id="quizSection"></div>
+
+    <!-- Chart.js Script -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</body>
+</html>
